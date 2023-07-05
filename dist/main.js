@@ -12,13 +12,12 @@ Coordinate system (reference):
 
 // ----------------- Classes -----------------------
 class Grid  {
-    constructor(numX, numY, h, dt) {
+    constructor(numX, numY, dt) {
         let canvas = document.getElementById('canvas-webgpu');
         this.numX = numX,                                         // number of cells in x direction
         this.numY = numY,                                         // number of cells in y direction
         this.pixelsPerCell = canvas.width / this.numX,
         this.cellsPerPixel = 1.0 / this.pixelsPerCell,            
-        this.h = h,                                               // physical length of cell
         this.dt = dt;
 
         this.u = new Float32Array(this.numX * this.numY),         // horizontal velocity  
@@ -33,7 +32,7 @@ class Grid  {
         this.obstacle = new Obstacle(0.3*this.numX, 0.5*this.numY, 0.04*this.numX);
     
         // Initialize cells to default values
-        const maxSpeed = 50;
+        const maxSpeed = 100;
         let r = this.numY;
         let c = this.numX;
         let pipeWidth = r / 10;
@@ -71,9 +70,8 @@ class Grid  {
         y = Math.floor(y);
         r = Math.ceil(r);
 
-        let vx = (x - this.obstacle.x) * h / this.dt;
-        let vy = (y - this.obstacle.y) * h/ this.dt;
-        console.log(vx, vy);
+        let vx = (x - this.obstacle.x) / this.dt;
+        let vy = (y - this.obstacle.y) / this.dt;
 
         // mark obstacle cells as occupied
         this.obstacle.x = x;
@@ -191,7 +189,7 @@ function step(grid, dt = 0.1) {
     let updateVelocity = (dt) => {
         let c = grid.numX;
         let r = grid.numY;
-        let gravity = 9.8;
+        let gravity = 9.8 / 0.4;
         for (var i = 1; i < r-1; i++) {
             for (var j = 1; j < c-1; j++) {
                 if (grid.s[i*c+j] == 0) {
@@ -286,54 +284,54 @@ function step(grid, dt = 0.1) {
         }
     }
     function bilerp(x, y, grid, feature) {
-        x = Math.max(Math.min(x, grid.numX*grid.h-1), 0.5*grid.h);
-        y = Math.max(Math.min(y, grid.numY*grid.h-1), 0.5*grid.h);
+        x = Math.max(Math.min(x, grid.numX-1.5), 0.5);
+        y = Math.max(Math.min(y, grid.numY-1.5), 0.5);
 
         // TODO: shorten this function
         if (feature == "horizontal") {
-            let x0 = Math.floor(x / grid.h) * grid.h;
-            let x1 = x0 + grid.h;
-            let y0 = Math.round(y / grid.h) * grid.h - 0.5 * grid.h;
-            let y1 = y0 + grid.h;
+            let x0 = Math.floor(x);
+            let x1 = x0 + 1;
+            let y0 = Math.round(y) - 0.5;
+            let y1 = y0 + 1;
 
             let tx = (x - x0) / (x1 - x0);
             let ty = (y - y0) / (y1 - y0);
 
             let c = grid.numX;
-            let i = Math.floor(y0 / grid.h);
-            let j = Math.floor(x0 / grid.h);
+            let i = Math.floor(y0);
+            let j = Math.floor(x0);
 
             let ret = (1 - ty) * ((1 - tx) * grid.u[i*c+j] + tx * grid.u[i*c+(j+1)])
                         + ty * ((1-tx) * grid.u[(i+1)*c+j] + tx * grid.u[(i+1)*c+(j+1)]);
             return ret;
         } else if (feature == "vertical") {
-            let x0 = Math.round(x / grid.h) * grid.h - 0.5 * grid.h;
-            let x1 = x0 + grid.h;
-            let y0 = Math.floor(y / grid.h) * grid.h;
-            let y1 = y0 + grid.h;
+            let x0 = Math.round(x) - 0.5;
+            let x1 = x0 + 1;
+            let y0 = Math.floor(y);
+            let y1 = y0 + 1;
 
             let tx = (x - x0) / (x1 - x0);
             let ty = (y - y0) / (y1 - y0);
 
             let c = grid.numX;
-            let i = Math.floor(y0 / grid.h) - 1;
-            let j = Math.floor(x0 / grid.h);
+            let i = Math.floor(y0) - 1;
+            let j = Math.floor(x0);
 
             let ret = (1 - ty) * ((1 - tx) * grid.v[i*c+j] + tx * grid.v[i*c+(j+1)])
                         + ty * ((1-tx) * grid.v[(i+1)*c+j] + tx * grid.v[(i+1)*c+(j+1)]);
             return ret;
         } else if (feature == "density") {
-            let x0 = Math.round(x / grid.h) * grid.h - 0.5 * grid.h;
-            let x1 = x0 + grid.h;
-            let y0 = Math.round(y / grid.h) * grid.h - 0.5 * grid.h;
-            let y1 = y0 + grid.h;
+            let x0 = Math.round(x) - 0.5;
+            let x1 = x0 + 1;
+            let y0 = Math.round(y) - 0.5;
+            let y1 = y0 + 1;
 
             let tx = (x - x0) / (x1 - x0);
             let ty = (y - y0) / (y1 - y0);
 
             let c = grid.numX;
-            let i = Math.floor(y0 / grid.h);
-            let j = Math.floor(x0 / grid.h);
+            let i = Math.floor(y0);
+            let j = Math.floor(x0);
             
             let ret = (1 - ty) * ((1 - tx) * grid.d[i*c+j] + tx * grid.d[i*c+(j+1)])
                         + ty * ((1-tx) * grid.d[(i+1)*c+j] + tx * grid.d[(i+1)*c+(j+1)]);
@@ -358,8 +356,8 @@ function step(grid, dt = 0.1) {
                 // compute new horizontal velocity
                 {
                     // get current position
-                    let x = j * grid.h;
-                    let y = i * grid.h + grid.h * 0.5;
+                    let x = j;
+                    let y = i + 0.5;
 
                     // get velocity at current position
                     let s = grid.s[i*c+(j-1)] + grid.s[(i-1)*c+(j-1)] + grid.s[(i-1)*c+j] + grid.s[i*c+j];
@@ -373,14 +371,15 @@ function step(grid, dt = 0.1) {
                     x -= dt * u;
                     y -= dt * v;
                     
-                    grid.uTemp[i*c+j] = bilerp(x, y, grid, "horizontal");
+                    let uNew = bilerp(x,y, grid, "horizontal");
+                    grid.uTemp[i*c+j] = uNew;
                 }
                 
                 // compute new vertical velocity
                 {
                     // get current position
-                    let x = j * grid.h + grid.h * 0.5;
-                    let y = (i+1) * grid.h;
+                    let x = j + 0.5;
+                    let y = (i+1);
 
                     // get velocity at current position
                     let s = grid.s[i*c+j] + grid.s[(i+1)*c+j] + grid.s[i*c+(j+1)] + grid.s[(i+1)*c+(j+1)];
@@ -394,7 +393,8 @@ function step(grid, dt = 0.1) {
                     x -= dt * u;
                     y -= dt * v;
 
-                    grid.vTemp[i*c+j] = bilerp(x, y, grid, "vertical");
+                    let vNew = bilerp(x, y, grid, "vertical");
+                    grid.vTemp[i*c+j] = vNew;
                 } 
 
             }
@@ -417,8 +417,8 @@ function step(grid, dt = 0.1) {
                 }
 
                 // get position at center of cell
-                let x = j * grid.h + grid.h * 0.5;
-                let y = i * grid.h + grid.h * 0.5;
+                let x = j + 0.5;
+                let y = i + 0.5;
 
                 // compute velocity at center of cell
                 let u = (grid.u[i*c+j] + grid.u[i*c+(j+1)]) * 0.5;
@@ -443,15 +443,15 @@ function step(grid, dt = 0.1) {
     advectDensity(dt);
 }
 
-let grid = new Grid(160, 160, h = 0.4, dt = 1.0 / 30);
+let grid = new Grid(160, 160, dt = 1.0 / 30);
 drawGrid(grid);
 
 // ----------- HTML / Interactivity ----------------------
-let stepButton = document.getElementById("step");
-let stepCount = 0;
+let stepButton = document.getElementById("step"); 
 stepButton.addEventListener("click", () => { 
     step(grid, dt=grid.dt);
-    stepCount++;
+    cnt++;
+    console.log(cnt);
     clearGrid(grid); 
     drawGrid(grid); 
 });
@@ -469,7 +469,7 @@ for (var i = 0; i < gridFeatures.length; i++) {
 document.getElementById("reset").onclick = () => {
     let numX = grid.numX;
     let numY = grid.numY;
-    grid = new Grid(numX, numY, h = 0.4, dt = 1.0 / 30);
+    grid = new Grid(numX, numY, dt = 1.0 / 30);
     clearGrid(grid);
     drawGrid(grid);
 }
@@ -491,15 +491,13 @@ let rect = canvas.getBoundingClientRect();
 canvas.addEventListener('mousedown', (event) => {
     let x = (event.x - rect.left) * grid.cellsPerPixel;
     let y = (event.y - rect.top) * grid.cellsPerPixel;
-    console.log(x,y);
     obstacleClicked = grid.obstacle.contains(x,y);
-    console.log(obstacleClicked);
+    console.log(x, y);
 });
 
 canvas.addEventListener('mousemove', (event) => {
     let x = (event.x - rect.left) * grid.cellsPerPixel;
     let y = (event.y - rect.top) * grid.cellsPerPixel;
-    console.log(x, y);
     if (obstacleClicked) {  
         grid.clearObstacle();
         grid.setObstacle(x, y, r = grid.obstacle.r);
@@ -520,6 +518,7 @@ function animate() {
         clearGrid(grid);
         step(grid, dt=grid.dt);
         drawGrid(grid);
+        console.log(cnt);
     }
     window.requestAnimationFrame(animate);
 }
@@ -528,4 +527,4 @@ window.requestAnimationFrame(animate);
 
 
 // Log frame rate to console
-// window.setInterval(() => { console.log(cnt); cnt = 0; }, 1000);
+// window.setInterval(() => { console.log(cnt); /*cnt = 0;*/ }, 1000);
