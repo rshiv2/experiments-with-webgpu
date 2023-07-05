@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<head>
+   <meta charset="utf-8">
+   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+   <title>WebGPU Step-by-Step 7</title>
+   <meta name="description" content="">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+   <div>
+       <h1>Create Square with GPU Buffer</h1><br>
+       <h2 id="gpu-supported"></h2>
+
+       <fieldset>
+          <legend>Grid Features</legend>
+          <div>
+             <input type="checkbox" id="velocity" class="grid-feature" >
+             <label for="velocity">Velocity Vectors</label>
+             <br>
+             <input type="checkbox" id="occupancy" class="grid-feature" checked>
+             <label for="occupancy">Occupied Cells</label>
+             <br>
+             <input type="checkbox" id="density" class="grid-feature" checked>
+             <label for="density">Cell Density</label>
+          </div>
+       </fieldset>
+
+       <button id="step">Step</button>
+       <button id="reset">Reset</button>
+       <button id="play">Play</button>
+       <br><br>
+       <canvas id="canvas-webgpu" width="480" height="480"></canvas>
+
+   </div>
+
+   <script src="main.js"></script>
+   <!-- <script src="main.bundle.js"></script> -->
+</body>
+</html>
