@@ -10,31 +10,29 @@
 <body>
    <div>
        <h1>Create Square with GPU Buffer</h1><br>
-       <h2 id="gpu-supported"></h2>
-
-       <fieldset>
-          <legend>Grid Properties</legend>
-          <div>
-             <input type="checkbox" id="velocity" class="grid-property" >
-             <label for="velocity">Velocity Vectors</label>
-             <br>
-             <input type="checkbox" id="occupancy" class="grid-property" checked>
-             <label for="occupancy">Occupied Cells</label>
-             <br>
-             <input type="checkbox" id="density" class="grid-property" checked>
-             <label for="density">Cell Density</label>
-          </div>
-       </fieldset>
-
-       <button id="step">Step</button>
-       <button id="reset">Reset</button>
-       <button id="play">Play</button>
-       <br><br>
-       <canvas id="canvas-webgpu" width="480" height="480"></canvas>
+   </div>
+   <div>
+       <input type="range" min="0" max="359" value="180" class="slider" id="light-angle">
+       <label for="light-angle">Light Angle</label>
+       <br>
+       <input type="range" min="1.5" max="10" value="3" step="0.1" class="slider" id="light-height">
+       <label for="light-height">Light Y-Value</label>
+   </div>
+   <div>
+      <input type="range" min="0" max="1" value="0.5" step="0.05" class="slider" id="ambient">
+      <label for="ambient">Ambient Coefficient</label>
+      <br>
+      <input type="range" min="0" max="1" value="0.5" step="0.05" class="slider" id="diffuse">
+      <label for="diffuse">Diffuse Coefficient</label>
+      <br>
+      <input type="range" min="0" max="1" value="0.5" step="0.05" class="slider" id="specular">
+      <label for="specular">Specular Coefficient</label> 
+      <br>
+      <input type="range" min="0" max="10" value="5" class="slider" id="shininess">
+      <label for="shininess">Shininess</label>
 
    </div>
-
-   <script src="main.js"></script>
-   <!-- <script src="main.bundle.js"></script> -->
+   <canvas id="canvas-webgpu" width="640" height="480"></canvas>
+   <script src="main.bundle.js"></script>
 </body>
 </html>
