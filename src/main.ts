@@ -1,40 +1,95 @@
 import $ from 'jquery';
-import { InitGPU, CreateGPUBuffer, CreateViewProjection, CreateTransforms } from './helper';
+import { InitGPU, CreateVertexBuffer, CreateIndexBuffer, CreateViewProjection, CreateTransforms } from './helper';
 import { Shaders } from './shaders';
-import { CubeData, FloorData } from './vertex_data';
+import { ReadOBJ } from './vertex_data';
 import { mat4, vec4, vec3 } from 'gl-matrix';
 
+const SetObjectColor = (colorData: Float32Array, newColor: Float32Array) => {
+    for (let i = 0; i < colorData.length; i+=3) {
+        colorData[i]   = newColor[0];
+        colorData[i+1] = newColor[1];
+        colorData[i+2] = newColor[2];
+    }
+}
+
+const Float32Concat = (first: Float32Array, second: Float32Array) => {
+    let firstLength = first.length;
+    let result = new Float32Array(firstLength + second.length);
+    result.set(first);
+    result.set(second, firstLength);
+    return result;
+}
+
+const Uint32Concat = (first: Uint32Array, second: Uint32Array) => {
+    let firstLength = first.length;
+    let result = new Uint32Array(firstLength + second.length);
+    result.set(first);
+    result.set(second, firstLength);
+    return result;
+
+}
 
 const GetVertexData = async(device: GPUDevice) => {
 
-    const cubeData = CubeData();
-    const floorData = FloorData();
+    const files: Array<string> = ["../objs/cone.obj", "../objs/sphere.obj", "../objs/cube.obj", "../objs/floor.obj", "../objs/icosahedron.obj"];
+    const numObjects = files.length; 
 
-    const numCubeVertices = cubeData.positions.length / 3;
-    const numFloorVertices = floorData.positions.length / 3;
-    const numVertices = numCubeVertices + numFloorVertices;
+    let vertexData = new Float32Array();
+    let colorData  = new Float32Array();
+    let normalData = new Float32Array();
+    let indexData  = new Uint32Array();
+    let objectStartIndices = new Uint32Array(files.length + 1);
+    let modelMatrices: Array<mat4> = [];
 
-    let vertexData = new Float32Array(numCubeVertices*3 + numFloorVertices*3);
-    vertexData.set(cubeData.positions);
-    vertexData.set(floorData.positions, numCubeVertices*3);
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const object = (await ReadOBJ(file));
+        SetObjectColor(object.colors, new Float32Array([Math.round(Math.random()),
+                                                        Math.round(Math.random()),
+                                                        Math.round(Math.random())]));
+        
+        objectStartIndices[i] = indexData.length;
+        const offset = vertexData.length / 3;   
+        for (let j = 0; j < object.indices.length; j++) {
+            object.indices[j] += offset;
+        }
+        indexData = Uint32Concat(indexData, object.indices);
+        vertexData = Float32Concat(vertexData, object.vertices);
+        colorData  = Float32Concat(colorData, object.colors);
+        normalData = Float32Concat(normalData, object.normals);
 
-    let colorData = new Float32Array(numCubeVertices*3 + numFloorVertices*3);
-    colorData.set(cubeData.colors);
-    colorData.set(floorData.colors, numCubeVertices*3);
+        const modelMatrix = mat4.create();
+        if (file === "../objs/floor.obj") {
+            modelMatrices[i] = modelMatrix;
+        } else {
+            let translation = vec3.fromValues(5*Math.sin(i / numObjects * 2 * Math.PI),
+                                                0, 5*Math.cos(i / numObjects * 2 * Math.PI));
 
-    let normalData = new Float32Array(numCubeVertices*3 + numFloorVertices*3);
-    normalData.set(cubeData.normals);
-    normalData.set(floorData.normals, numCubeVertices*3);
+            if (file === "../objs/cone.obj") {
+                const rot = vec3.fromValues(-Math.PI/2,0,0);
+                const scale = vec3.fromValues(10,10,10);
+                vec3.add(translation, translation, vec3.fromValues(0,-1,0));
+                CreateTransforms(modelMatrix, translation, rot, scale);
+            } else {
+                CreateTransforms(modelMatrix, translation);
+            }
+            modelMatrices[i] = modelMatrix;
+        }
+    }
+    objectStartIndices[objectStartIndices.length-1] = indexData.length;
 
-    const vertexBuffer = CreateGPUBuffer(device, vertexData);
-    const colorBuffer = CreateGPUBuffer(device, colorData);
-    const normalBuffer = CreateGPUBuffer(device, normalData);
+    const vertexBuffer = CreateVertexBuffer(device, vertexData);
+    const indexBuffer  = CreateIndexBuffer(device, indexData);
+    const colorBuffer  = CreateVertexBuffer(device, colorData);
+    const normalBuffer = CreateVertexBuffer(device, normalData);
 
-    return {
+    return { 
         vertexBuffer,
+        indexBuffer,
         colorBuffer,
         normalBuffer,
-        numVertices
+        objectStartIndices,
+        modelMatrices
     }
 }
 
@@ -125,6 +180,7 @@ const CreateShadowPipeline = async (
         },
         primitive: {
             topology: "triangle-list",
+            //cullMode: "front",
         },
         depthStencil: {
             format: "depth24plus",
@@ -178,38 +234,23 @@ const CreateBindGroup = async (
 
 }
 
+interface ObjectInfo {
+    modelMatrix:         mat4,   
+    shadowPassBindGroup: GPUBindGroup,
+    shadowMVPMat:        GPUBuffer,
+    renderPassBindGroup: GPUBindGroup,
+    renderMVPMat:        GPUBuffer,
+    startIndex:          number,
+    endIndex:            number
+
+}
+
 const CreateSquare = async () => {
     const gpu = await InitGPU();
     const device = gpu.device;
 
     const vertexData = GetVertexData(device);
-    const vertexBuffer = (await vertexData).vertexBuffer;
-    const colorBuffer = (await vertexData).colorBuffer;
-    const normalBuffer = (await vertexData).normalBuffer;
-    const numVertices = (await vertexData).numVertices;
-
     const shader = Shaders();
-
-    /* Create Uniforms for matrix transforms*/
-    let modelMatrix = mat4.create();
-    const vp = CreateViewProjection(gpu.canvas.width/gpu.canvas.height);
-
-    const viewMatrix = vp.viewMatrix;
-    const projectionMatrix = vp.projectionMatrix;
-    const mat4x4ByteLength = 16 * 4;
-    const uniformTransformBuffer = device.createBuffer({
-        size: mat4x4ByteLength * 3,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-    });
-
-    const shadowMVPMat = device.createBuffer({
-        size: mat4x4ByteLength * 3,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-    });
-
-    device.queue.writeBuffer(uniformTransformBuffer, 0, modelMatrix as ArrayBuffer);
-    device.queue.writeBuffer(uniformTransformBuffer, mat4x4ByteLength, viewMatrix as ArrayBuffer);
-    device.queue.writeBuffer(uniformTransformBuffer, mat4x4ByteLength * 2, projectionMatrix as ArrayBuffer);
 
     /* Create uniforms for light source and camera */
     const lightSourceColor = vec4.fromValues(1,1,1,1);
@@ -235,7 +276,19 @@ const CreateSquare = async () => {
     device.queue.writeBuffer(uniformLightSrcBuffer, 16, lightSourceColor as ArrayBuffer);
     device.queue.writeBuffer(uniformCameraPos, 0, cameraPos as ArrayBuffer);
 
-    /* Create bind groups */
+    /* Create textures + samplers for shadow pass */
+    const shadowMap = device.createTexture({
+        size: [gpu.canvas.width * 2, gpu.canvas.height * 2, 1],
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+    });
+
+    const shadowMapSampler = device.createSampler({
+        compare: "less",
+        magFilter: "linear"
+    });
+
+    /* Create bind group layouts */
     const shadowBindGroupLayout = device.createBindGroupLayout({
         entries: [
             {
@@ -248,10 +301,7 @@ const CreateSquare = async () => {
         ]
     });
 
-    const shadowBuffers = [shadowMVPMat];
-    const shadowPassBindGroup = await CreateBindGroup(device, shadowBindGroupLayout, shadowBuffers);
-
-    const uniformBindGroupLayout = device.createBindGroupLayout({
+    const renderBindGroupLayout = device.createBindGroupLayout({
         entries: [
             {
                 binding: 0, 
@@ -305,34 +355,63 @@ const CreateSquare = async () => {
         ]
     });
 
-    const shadowMap = device.createTexture({
-        size: [gpu.canvas.width * 2, gpu.canvas.height * 2, 1],
-        format: "depth24plus",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-    });
+    /* Create bind groups for each object in scene */
+    let objects: Array<ObjectInfo> = [];
+    const vp = CreateViewProjection(gpu.canvas.width/gpu.canvas.height);
+    const viewMatrix = vp.viewMatrix;
+    const projectionMatrix = vp.projectionMatrix;
+    const mat4x4ByteLength = 16 * 4;
+    const objectStartIndices = (await vertexData).objectStartIndices;
+    const modelMatrices = (await vertexData).modelMatrices;
+    const numObjects = modelMatrices.length;
 
-    const shadowMapSampler = device.createSampler({
-        compare: "less",
-        magFilter: "linear"
-    })
+    for (let i = 0; i < numObjects; i++) {
 
-    const buffers = [uniformTransformBuffer, shadowMVPMat, uniformLightSrcBuffer, uniformCameraPos, uniformMaterialBuffer];
-    const textures = [shadowMap];
-    const samplers = [shadowMapSampler];
-    const renderPassBindGroup = await CreateBindGroup(device, uniformBindGroupLayout, buffers, textures, samplers);
+        /* Create bind group and MVPBuffer for shadow pass */
+        const shadowMVPMat = device.createBuffer({
+            size: mat4x4ByteLength * 3,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        const shadowBuffers = [shadowMVPMat];
+        const shadowPassBindGroup = await CreateBindGroup(device, shadowBindGroupLayout, shadowBuffers);
 
-    /* Define pipeline
-        Describe layout of render pipeline, including
-        what the shaders are, what data they will use,
-        what textures will be used, etc.
-    */
+        /* Create bind group and MVPBuffer for render pass */
+        const renderMVPMat = device.createBuffer({
+            size: mat4x4ByteLength * 3,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+    
+        // will write model matrix to this buffer at draw call
+        device.queue.writeBuffer(renderMVPMat, mat4x4ByteLength * 1, viewMatrix as ArrayBuffer);
+        device.queue.writeBuffer(renderMVPMat, mat4x4ByteLength * 2, projectionMatrix as ArrayBuffer);
+        const buffers = [renderMVPMat, shadowMVPMat, uniformLightSrcBuffer, uniformCameraPos, uniformMaterialBuffer];
+        const textures = [shadowMap];
+        const samplers = [shadowMapSampler];
+        const renderPassBindGroup = await CreateBindGroup(device, renderBindGroupLayout, buffers, textures, samplers);
+
+        const startIndex = objectStartIndices[i];
+        const endIndex = objectStartIndices[i+1];
+        const modelMatrix = modelMatrices[i];
+
+        objects.push({
+            modelMatrix,
+            shadowPassBindGroup,
+            shadowMVPMat,
+            renderPassBindGroup,
+            renderMVPMat,
+            startIndex: startIndex,
+            endIndex: endIndex
+        });
+    }
+
+    /* Define pipelines */
     const pipelineLayout = device.createPipelineLayout({
         bindGroupLayouts: [
-            uniformBindGroupLayout,
+            renderBindGroupLayout,
         ]
     });
 
-    const pipeline = await CreateRenderPipeline(device, pipelineLayout, gpu.format, shader.renderPass);
+    const renderPipeline = await CreateRenderPipeline(device, pipelineLayout, gpu.format, shader.renderPass);
 
     const shadowPipelineLayout = device.createPipelineLayout({
         bindGroupLayouts: [
@@ -352,7 +431,7 @@ const CreateSquare = async () => {
     const renderPassDescriptor = {
         colorAttachments: [{
             view: undefined as unknown as GPUTextureView,
-            clearValue: { r: 0.5, g: 0.5, b: 0.8, a: 1.0 }, //background color
+            clearValue: { r: 0.5, g: 0.5, b: 0.8, a: 1.0 }, // background color
             loadOp: 'clear',
             storeOp: 'store'
         }],
@@ -374,27 +453,25 @@ const CreateSquare = async () => {
         }
     };
 
-    function draw() {
+    const draw = async () => {
+
+        /* get vertex data */
+        const vertexBuffer = (await vertexData).vertexBuffer;
+        const indexBuffer  = (await vertexData).indexBuffer;
+        const colorBuffer  = (await vertexData).colorBuffer;
+        const normalBuffer = (await vertexData).normalBuffer;
 
         /* get material constants */
         const material = getMaterial();
         device.queue.writeBuffer(uniformMaterialBuffer, 0, material as ArrayBuffer);
 
-        /* update light source */
+        /* update light source and VP matrices for shadow pass */
         const angle = getLightAngle();
         const height = getLightYPos();
-        const lightSourcePos = vec4.fromValues(6*Math.cos(angle),height,6*Math.sin(angle),1);      // world space
- 
-        /* update mvp matrix for shadow pass */
-        CreateTransforms(modelMatrix);
+        const lightSourcePos = vec4.fromValues(10*Math.cos(angle),height,10*Math.sin(angle),1);      // world space position of light
+
         let shadowVPMatrices = CreateViewProjection(1.0, 
             vec3.fromValues(lightSourcePos[0], lightSourcePos[1], lightSourcePos[2]));
-
-        device.queue.writeBuffer(shadowMVPMat, 0, modelMatrix as ArrayBuffer);
-        device.queue.writeBuffer(shadowMVPMat, mat4x4ByteLength, shadowVPMatrices.viewMatrix as ArrayBuffer);
-        device.queue.writeBuffer(shadowMVPMat, 2*mat4x4ByteLength, shadowVPMatrices.projectionMatrix as ArrayBuffer);
-        
-        
 
         vec4.transformMat4(lightSourcePos, lightSourcePos, viewMatrix);     // view space
         device.queue.writeBuffer(uniformLightSrcBuffer, 0, lightSourcePos as ArrayBuffer);
@@ -403,9 +480,17 @@ const CreateSquare = async () => {
         const shadowCommandEncoder = device.createCommandEncoder();
         const shadowPass = shadowCommandEncoder.beginRenderPass(shadowPassDescriptor as GPURenderPassDescriptor);
         shadowPass.setVertexBuffer(0, vertexBuffer);
+        shadowPass.setIndexBuffer(indexBuffer, "uint32");
         shadowPass.setPipeline(shadowPipeline);
-        shadowPass.setBindGroup(0, shadowPassBindGroup);
-        shadowPass.draw(numVertices);
+       
+ 
+        for (const object of objects) {
+            shadowPass.setBindGroup(0, object.shadowPassBindGroup);
+            device.queue.writeBuffer(object.shadowMVPMat, 0, object.modelMatrix as ArrayBuffer);
+            device.queue.writeBuffer(object.shadowMVPMat, 1*mat4x4ByteLength, shadowVPMatrices.viewMatrix as ArrayBuffer);
+            device.queue.writeBuffer(object.shadowMVPMat, 2*mat4x4ByteLength, shadowVPMatrices.projectionMatrix as ArrayBuffer);
+            shadowPass.drawIndexed(object.endIndex - object.startIndex, 1, object.startIndex);
+        }
         shadowPass.end();
 
         /* render pass draw call */
@@ -416,9 +501,14 @@ const CreateSquare = async () => {
         renderPass.setVertexBuffer(0, vertexBuffer);
         renderPass.setVertexBuffer(1, colorBuffer);
         renderPass.setVertexBuffer(2, normalBuffer);
-        renderPass.setPipeline(pipeline);
-        renderPass.setBindGroup(0, renderPassBindGroup);
-        renderPass.draw(numVertices);
+        renderPass.setIndexBuffer(indexBuffer, "uint32");
+        renderPass.setPipeline(renderPipeline);
+
+        for (const object of objects) {
+            renderPass.setBindGroup(0, object.renderPassBindGroup);
+            device.queue.writeBuffer(object.renderMVPMat, 0, object.modelMatrix as ArrayBuffer);
+            renderPass.drawIndexed(object.endIndex - object.startIndex, 1, object.startIndex);
+        }
         renderPass.end();
 
         /* submit to device */

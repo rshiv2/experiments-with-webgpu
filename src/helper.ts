@@ -27,7 +27,7 @@ export const CreateViewProjection = (aspectRatio = 1.0, cameraPosition:vec3 = [6
     const viewMatrix = mat4.create();
     const projectionMatrix = mat4.create();       
     const viewProjectionMatrix = mat4.create();
-    mat4.perspective(projectionMatrix, 2*Math.PI/5, aspectRatio, 0.5, 50.0);
+    mat4.perspective(projectionMatrix, 2*Math.PI/5, aspectRatio, 0.5, 100.0);
 
     mat4.lookAt(viewMatrix, cameraPosition, lookDirection, upDirection);
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
@@ -65,16 +65,28 @@ export const CheckWebGPU = () => {
     return result;
 }
 
-export const CreateGPUBuffer = (device : GPUDevice, data:Float32Array,
+export const CreateVertexBuffer = (device : GPUDevice, data:Float32Array,
     usageFlag : GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST) => {
         const buffer = device.createBuffer({
             size: data.byteLength,
             usage: usageFlag,
             mappedAtCreation: true
         });
-        new Float32Array(buffer.getMappedRange()).set(data);
-        buffer.unmap();
-        return buffer;
+    new Float32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+    return buffer;
+}
+
+export const CreateIndexBuffer = (device: GPUDevice, data: Uint32Array,
+    usageFlag: GPUBufferUsageFlags = GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST) => {
+        const buffer = device.createBuffer({
+            size: data.byteLength,
+            usage: usageFlag,
+            mappedAtCreation: true
+        });
+    new Uint32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+    return buffer;
     }
 
 export const InitGPU = async() => {

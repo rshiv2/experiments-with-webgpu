@@ -19,17 +19,17 @@ export const Shaders = () => {
 
         @vertex
         fn main(
-            @location(0) pos: vec4<f32>, 
-            @location(1) color: vec4<f32>, 
-            @location(2) normal: vec4<f32>) -> Output {
+            @location(0) pos: vec3<f32>, 
+            @location(1) color: vec3<f32>, 
+            @location(2) normal: vec3<f32>) -> Output {
                 var output: Output;
 
-                output.Position = transforms.proj * transforms.view * transforms.model * pos;
-                output.vColor = color;
-                output.vNormal = normal;
-                output.vViewSpacePosition = transforms.view * transforms.model * pos;
+                output.Position = transforms.proj * transforms.view * transforms.model * vec4<f32>(pos, 1.0);
+                output.vNormal = normalize(transforms.model * vec4<f32>(normal, 0.0));
+                output.vColor = vec4<f32>(output.vNormal.xyz, 1.0); 
+                output.vViewSpacePosition = transforms.view * transforms.model * vec4<f32>(pos, 1.0);
 
-                var lightSpacePosition = lightTransform.proj * lightTransform.view * lightTransform.model * pos;
+                var lightSpacePosition = lightTransform.proj * lightTransform.view * lightTransform.model * vec4<f32>(pos, 1.0);
                 output.vLightSpacePosition = lightSpacePosition;
                 return output;
         } 
@@ -74,7 +74,7 @@ export const Shaders = () => {
 
                 var lightIntensity = material.kAmbient; 
 
-                var eps: f32 = 0.005; //max(0.05 * (1.0 - dot(fNormal.xyz, L)), 0.005);
+                var eps: f32 = 0.001;
                 var texCoord = fLightSpacePosition.xy / fLightSpacePosition.w;
                 texCoord = (texCoord * vec2(0.5,-0.5)) + vec2(0.5, 0.5);
                 var shadowZValue = clamp(fLightSpacePosition.z / fLightSpacePosition.w, 0.0, 1.0);
