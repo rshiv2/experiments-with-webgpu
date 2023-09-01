@@ -31,7 +31,7 @@ const Uint32Concat = (first: Uint32Array, second: Uint32Array) => {
 
 const GetVertexData = async(device: GPUDevice) => {
 
-    const files: Array<string> = ["../objs/cone.obj", "../objs/sphere.obj", "../objs/cube.obj", "../objs/floor.obj", "../objs/icosahedron.obj"];
+    const files: Array<string> = ["../objs/venus/venus.obj", "../objs/floor.obj", "../objs/lion.obj"];
     const numObjects = files.length; 
 
     let vertexData = new Float32Array();
@@ -44,9 +44,7 @@ const GetVertexData = async(device: GPUDevice) => {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const object = (await ReadOBJ(file));
-        SetObjectColor(object.colors, new Float32Array([Math.round(Math.random()),
-                                                        Math.round(Math.random()),
-                                                        Math.round(Math.random())]));
+        SetObjectColor(object.colors, new Float32Array([1,1,1]));
         
         objectStartIndices[i] = indexData.length;
         const offset = vertexData.length / 3;   
@@ -64,19 +62,29 @@ const GetVertexData = async(device: GPUDevice) => {
         } else {
             let translation = vec3.fromValues(5*Math.sin(i / numObjects * 2 * Math.PI),
                                                 0, 5*Math.cos(i / numObjects * 2 * Math.PI));
+            let rotation = vec3.fromValues(0,0,0);
+            let scale = vec3.fromValues(0,0,0);
 
             if (file === "../objs/cone.obj") {
-                const rot = vec3.fromValues(-Math.PI/2,0,0);
-                const scale = vec3.fromValues(10,10,10);
+                rotation = vec3.fromValues(-Math.PI/2,0,0);
+                scale = vec3.fromValues(10,10,10);
                 vec3.add(translation, translation, vec3.fromValues(0,-1,0));
-                CreateTransforms(modelMatrix, translation, rot, scale);
-            } else {
-                CreateTransforms(modelMatrix, translation);
+            } else if (file === "../objs/venus/venus.obj") {
+                rotation = vec3.fromValues(0,-Math.PI/2,0);
+                scale = vec3.fromValues(0.1, 0.1, 0.1);
+                translation = vec3.fromValues(-24,-1,0);
+            } else if (file === "../objs/lion.obj") {
+                scale = vec3.fromValues(0.04,0.04,0.04);
+                translation = vec3.fromValues(-1,-1,2.5);
             }
+            CreateTransforms(modelMatrix, translation, rotation, scale);
             modelMatrices[i] = modelMatrix;
         }
     }
     objectStartIndices[objectStartIndices.length-1] = indexData.length;
+    
+    console.log(objectStartIndices);
+    console.log(vertexData.length);
 
     const vertexBuffer = CreateVertexBuffer(device, vertexData);
     const indexBuffer  = CreateIndexBuffer(device, indexData);
@@ -180,7 +188,6 @@ const CreateShadowPipeline = async (
         },
         primitive: {
             topology: "triangle-list",
-            //cullMode: "front",
         },
         depthStencil: {
             format: "depth24plus",
@@ -245,7 +252,7 @@ interface ObjectInfo {
 
 }
 
-const CreateSquare = async () => {
+const RenderScene = async () => {
     const gpu = await InitGPU();
     const device = gpu.device;
 
@@ -538,5 +545,5 @@ function getMaterial() {
 }
 
 $(document).ready(function() {
-    CreateSquare();
+    RenderScene();
 });

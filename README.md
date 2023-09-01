@@ -1,4 +1,8 @@
 # experiments-with-webgpu
+<p align="center">
+    <img src="./images/cube.png" height="300" alt="render of cube with shadows">
+    <img src="./images/sculptures.png" alt="render of sculptures with shadows" height="300"/>
+</p>
 This code serves as a first foray into the WebGPU Graphics API. I provide a simple graphics engine that runs in the browser via JavaScript. I've also provided a high-level overview of the major moving parts of a WebGPU Application.
 
 # Features

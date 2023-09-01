@@ -21,7 +21,7 @@ export const CreateTransforms = (modelMat:mat4, translation:vec3 = [0,0,0], rota
     mat4.multiply(modelMat, translateMat, modelMat);
 };
 
-export const CreateViewProjection = (aspectRatio = 1.0, cameraPosition:vec3 = [6, 6, 12], lookDirection:vec3 = [0, 0, 0], 
+export const CreateViewProjection = (aspectRatio = 1.0, cameraPosition:vec3 = [6, 6, 12], lookDirection:vec3 = [0, 1, 0], 
     upDirection:vec3 = [0, 1, 0]) => {
 
     const viewMatrix = mat4.create();
@@ -87,7 +87,46 @@ export const CreateIndexBuffer = (device: GPUDevice, data: Uint32Array,
     new Uint32Array(buffer.getMappedRange()).set(data);
     buffer.unmap();
     return buffer;
+}
+
+export const CreateTexture = async (device: GPUDevice, imageName: string,
+    addressModeU: string = 'repeat', addressModeV: string = 'repeat')  => {
+
+    // get image bitmap
+    const img = document.createElement('img');
+    img.src = imageName;
+    await img.decode();
+    const imageBitmap = await createImageBitmap(img);
+
+    // create texture
+    const texture = device.createTexture({
+        size: [imageBitmap.width, imageBitmap.height, 1],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | 
+               GPUTextureUsage.COPY_DST | 
+               GPUTextureUsage.RENDER_ATTACHMENT
+    });
+
+    // create sampler
+    const sampler = device.createSampler({
+        minFilter: 'linear',
+        magFilter: 'linear',
+        addressModeU: addressModeU as GPUAddressMode,
+        addressModeV: addressModeV as GPUAddressMode
+    });
+
+    device.queue.copyExternalImageToTexture(
+        { source: imageBitmap },
+        { texture: texture },
+        [imageBitmap.width, imageBitmap.height]
+    );
+
+    return {
+        texture,
+        sampler
     }
+
+}
 
 export const InitGPU = async() => {
     const checkgpu = CheckWebGPU();

@@ -10,6 +10,7 @@ export const ReadOBJ = async (fname: string) => {
     let vertexData = [];
     let indexData = [];
     let normalData = [];
+    let uvData = [];
     let indexMap = new Map();    // if array[i] = [j,k], then vertex i uses normals j,k 
    
     // collect vertex, normal, and index data from file
@@ -22,7 +23,11 @@ export const ReadOBJ = async (fname: string) => {
                 vertexData.push(parseFloat(data[i]));
         } else if (startingChar === "vn") {
             for (let i = 0; i < 3; i++)
-                normalData.push(parseFloat(data[i]))
+                normalData.push(parseFloat(data[i]));
+        } else if (startingChar === "vt") {
+            for (let i = 0; i < 3; i++) {
+                uvData.push(parseFloat(data[i]));
+            }
         } else if (startingChar === "f") {
             for (let i = 0; i < 3; i++) {
 

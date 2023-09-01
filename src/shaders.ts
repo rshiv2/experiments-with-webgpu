@@ -26,7 +26,7 @@ export const Shaders = () => {
 
                 output.Position = transforms.proj * transforms.view * transforms.model * vec4<f32>(pos, 1.0);
                 output.vNormal = normalize(transforms.model * vec4<f32>(normal, 0.0));
-                output.vColor = vec4<f32>(output.vNormal.xyz, 1.0); 
+                output.vColor = vec4<f32>(color, 1.0); 
                 output.vViewSpacePosition = transforms.view * transforms.model * vec4<f32>(pos, 1.0);
 
                 var lightSpacePosition = lightTransform.proj * lightTransform.view * lightTransform.model * vec4<f32>(pos, 1.0);
